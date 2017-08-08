@@ -1,12 +1,14 @@
 package com.nhs.choices.api
 
-import java.io.File
+import java.io.{File, FileInputStream, FileOutputStream, InputStream}
+import java.nio.file.Path
+import java.util.zip.ZipInputStream
 
 import com.nhs.choices.storage.DiseaseArticleRepository
 import net.ruippeixotog.scalascraper.browser.{Browser, JsoupBrowser}
 import org.elasticsearch.client.Client
-import org.junit.{Before, Test}
 import org.junit.runner.RunWith
+import org.junit.{Before, Test}
 import org.mockito.BDDMockito.given
 import org.mockito.Matchers
 import org.springframework.beans.factory.annotation.Autowired
@@ -45,6 +47,31 @@ class NHSChoicesAPIEndpointTest {
   @Before
   def setup(): Unit = {
     JsonCacheLocation.delete()
+
+    val testResourcesArchiveFile = load("test-resources.zip")
+
+    val zipFileInputStream = new FileInputStream(testResourcesArchiveFile)
+    unzip(zipFileInputStream, testResourcesArchiveFile.getParentFile.toPath)
+    zipFileInputStream.close()
+  }
+
+  private def unzip(zipFile: InputStream, destination: Path): Unit = {
+    val zis = new ZipInputStream(zipFile)
+
+    Stream.continually(zis.getNextEntry).takeWhile(_ != null).foreach { file =>
+      if (!file.isDirectory) {
+        val outPath = destination.resolve(file.getName)
+        val outPathParent = outPath.getParent
+        if (!outPathParent.toFile.exists()) {
+          outPathParent.toFile.mkdirs()
+        }
+
+        val outFile = outPath.toFile
+        val out = new FileOutputStream(outFile)
+        val buffer = new Array[Byte](4096)
+        Stream.continually(zis.read(buffer)).takeWhile(_ != -1).foreach(out.write(buffer, 0, _))
+      }
+    }
   }
 
 
